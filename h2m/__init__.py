@@ -2,7 +2,7 @@
 
 __author__ = """goooice"""
 __email__ = 'devel0per1991@outlook.com'
-__version__ = '0.1.3'
+__version__ = '0.1.4'
 
 from .h2m import h2m, HTMLParserToMarkDown
 def set_debug_level(level):
