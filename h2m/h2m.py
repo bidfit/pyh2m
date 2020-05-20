@@ -31,6 +31,7 @@ class TableParser:
         while i > 0:
             thead_char = f"{thead_char}--------|"
             i = i - 1
+        return thead_char
 
     def convert_table(self, node):
         thead_char = ""
@@ -166,6 +167,8 @@ class ConvertClass:
     def convert(self, node):
         if node.get('md', None) is not None:
             node['md'] = node['md'] and ''.join(node['md'])
+            if node['md'] == 'None' :
+                print('hi None')
         else:
             node['md'] = ""
 
@@ -191,22 +194,6 @@ class HTMLParserToMarkDown(HTMLParser):
                         datefmt='%m/%d/%Y %I:%M:%S %p')
     logger = logging.getLogger(__name__)
 
-    # escape_map = {
-    #     "&amp;": "&",
-    #     "&lt;": "<",
-    #     "&gt;": ">",
-    #     "&quot;": "\"",
-    #     "&#x27;": "'",
-    #     "&#x60;": "`",
-    #     "&nbsp;": " ",
-    #     "&#8202;": " "
-    # }
-
-    # def unescape(self, html_string):
-    #     r_str = f'({"|".join(self.escape_map.keys())})'
-    #     r = re.compile(r_str)
-    #     return re.sub(r, lambda m: self.escape_map[m.group()], html_string)
-
     def set_debug_level(self, level):
         self.logger.setLevel(level)
 
@@ -230,11 +217,14 @@ class HTMLParserToMarkDown(HTMLParser):
             self.logger.debug("     attr:" + str(attr))
 
     def handle_endtag(self, tag):
+        node_buffer_length = len(self.node_buffer)
+
         if tag == "br":
-            self.node_buffer[len(self.node_buffer) - 1].get('md', []).append('\n')
+            self.node_buffer[node_buffer_length - 1].get('md', []).append('\n')
             return
-        if len(self.node_buffer) != 0:
+        if node_buffer_length != 0:
             last = self.node_buffer.pop()
+            node_buffer_length = len(self.node_buffer)
             md = self.converter.convert(last)
         else:
             md = ""
@@ -242,10 +232,10 @@ class HTMLParserToMarkDown(HTMLParser):
         if tag is "pre":
             is_in_pre_node = False
 
-        if len(self.node_buffer) == 0:
+        if node_buffer_length == 0:
             return self.results.append(md)
 
-        tail = self.node_buffer[len(self.node_buffer) - 1]
+        tail = self.node_buffer[node_buffer_length - 1]
         tail['md'] = tail.get('md', [])
         tail['md'].append(md)
 
@@ -257,9 +247,11 @@ class HTMLParserToMarkDown(HTMLParser):
         # data = self.unescape(data)
         data = unescape(data)
         last = {}
-        last = self.node_buffer[len(self.node_buffer) - 1]
-        self.logger.debug(last)
-        if last is not None:
+        node_buffer_length = len(self.node_buffer)
+        if node_buffer_length >= 1:
+            last = self.node_buffer[node_buffer_length - 1]
+            self.logger.debug(last)
+
             last['md'] = last.get('md', [])
             last['md'].append(data)
         else:
@@ -326,7 +318,7 @@ if __name__ == "__main__":
     # </blockquote>''')
 
     import pathlib
-    test_html = pathlib.Path("tests\\html\\unknown2.html")
+    test_html = pathlib.Path("tests\\html\\unknown3.html")
     with test_html.open('rt', encoding='utf-8') as th:
         html = th.readlines()
         h2m.feed("".join(html))
