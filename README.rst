@@ -9,27 +9,32 @@ pyh2m
 
 simple and flexible html to markdown python converter
 
-
-h2m.feed('''<h1>Level One Heading</h1>''')
-
-assert h2m.md() == '''# Level One Heading'''
-
-h2m.feed('''<h2>Level Two Heading</h2>''')
-
-assert h2m.md() == '''## Level Two Heading'''
-
-h2m.feed('''<h3>Level Three Heading</h3>''')
-
-assert h2m.md() == '''### Level Three Heading'''
-
-
 * Free software: MIT license
+
+Usages
+-------
+
+.. code::
+
+        h2m.feed('''<h1>Level One Heading</h1>''')
+
+        assert h2m.md() == '''# Level One Heading'''
+
+        h2m.feed('''<h2>Level Two Heading</h2>''')
+
+        assert h2m.md() == '''## Level Two Heading'''
+
+        h2m.feed('''<h3>Level Three Heading</h3>''')
+
+        assert h2m.md() == '''### Level Three Heading'''
 
 
 Features
 --------
 
-* TODO Tables of gov
+* 2 levels table convert
+* raw text with <b> <strong> <i> <em>
+
 
 Credits
 -------

@@ -12,11 +12,7 @@ class TableParser:
     # 表格相关开始
 
     def __init__(self):
-        self.is_handle_thead_char = False
-        self.is_th = False
-        self.is_tr = False
-        self.tr_count = 0
-        self.th_count = 0
+        self.reset_table()
 
     def reset_table(self):
         self.is_handle_thead_char = False
@@ -24,6 +20,7 @@ class TableParser:
         self.is_th = False
         self.tr_count = 0
         self.th_count = 0
+        self.table_level = 1
 
     def get_thead_char(self):
         thead_char = '|'
@@ -67,8 +64,9 @@ class TableParser:
         if self.tr_count == 0:
             self.th_count = self.th_count + 1
         md = node.get('md')
-        r = re.compile('(<br>)|(<br/>)|(\n)|(\r\n)')
-        md = re.sub(r, '', md)
+        if node['table_level'] != 13:
+            r = re.compile('(<br>)|(<br/>)|(</br>)|(\n)|(\r\n)')
+            md = re.sub(r, '', md)
         return f'{md}|'
     # 表格相关结束
 
@@ -79,10 +77,10 @@ class ConvertClass:
         self.table_parser = TableParser()
         self.converters = {
             "a": self.convert_a,
-            "b": "**{}**",
+            "b": self.convert_b_strong,
             "p": "\n{}\n",
-            "i": "_{}_",
-            "em": "_{}_",
+            "i": self.convert_i_em,
+            "em": self.convert_i_em,
             "h1": "\n# {}\n",
             "h2": "\n## {}\n",
             "h3": "\n### {}\n",
@@ -106,9 +104,10 @@ class ConvertClass:
             "img": self.convert_img,
             "pre": self.convert_pre,
             "code": self.convert_code,
-            "strong": "**{}**",
+            "strong": self.convert_b_strong,
 
             "script": "",
+            "style": "",
 
             "blockquote": self.convert_blockquote,
 
@@ -120,6 +119,18 @@ class ConvertClass:
         text = text.replace('\n', '')
         href = node.get('attrs', {'href': text}).get('href')
         return f"[{text}]({href})"
+
+    def convert_b_strong(self, node):
+        if node['raw_text_flag']:
+            return f"{node.get('md')}"
+        else:
+            return f"**{node.get('md')}**"
+
+    def convert_i_em(self, node):
+        if node['raw_text_flag']:
+            return f"{node.get('md')}"
+        else:
+            return f"_{node.get('md')}_"
 
     def convert_img(self, node):
         attrs = node.get('attrs', {'title': '', 'alt': '', 'src': ''})
@@ -160,6 +171,8 @@ class ConvertClass:
         r = re.compile(r_str)
         md = node.get('md')
         # md = re.sub(r, '', md)
+        if node['table_level'] > 10:
+            return md
         md = ''.join(
             map(lambda line: f"> {re.sub(r, '', line)}\n", md.split('\n')))
         return f'\n{md}\n'
@@ -190,6 +203,8 @@ class HTMLParserToMarkDown(HTMLParser):
     node_buffer = []
     results = []
     is_in_pre_node = False
+    table_level = 1
+    raw_text_flag = False
     logging.basicConfig(format='%(asctime)s %(message)s',
                         datefmt='%m/%d/%Y %I:%M:%S %p')
     logger = logging.getLogger(__name__)
@@ -197,12 +212,27 @@ class HTMLParserToMarkDown(HTMLParser):
     def set_debug_level(self, level):
         self.logger.setLevel(level)
 
+    def feed(self, data):
+        r_table = re.compile('<table[\S\s\w]*<table[\S\s\w]*</table>')
+        if re.search(r_table, data):
+            self.table_level = 12
+
+        super().feed(data)
+        # 只接收完整的html
+        self.close()
+
+
     def handle_starttag(self, tag, attrs):
         node = {
             'tag': tag,
             'attrs': dict(attrs),
-            'is_in_pre_node': self.is_in_pre_node
+            'is_in_pre_node': self.is_in_pre_node,
+            'table_level': self.table_level,
+            'raw_text_flag': self.raw_text_flag
         }
+
+        if tag == 'table':
+            self.table_level = self.table_level + 1
 
         if tag == "pre":
             self.is_in_pre_node = True
@@ -218,6 +248,8 @@ class HTMLParserToMarkDown(HTMLParser):
 
     def handle_endtag(self, tag):
         node_buffer_length = len(self.node_buffer)
+        if tag == 'table':
+            self.table_level = self.table_level - 1
 
         if tag == "br":
             self.node_buffer[node_buffer_length - 1].get('md', []).append('\n')
@@ -318,7 +350,8 @@ if __name__ == "__main__":
     # </blockquote>''')
 
     import pathlib
-    test_html = pathlib.Path("tests\\html\\unknown3.html")
+    h2m.raw_text_flag = True
+    test_html = pathlib.Path("tests\\html\\raw_text.html")
     with test_html.open('rt', encoding='utf-8') as th:
         html = th.readlines()
         h2m.feed("".join(html))

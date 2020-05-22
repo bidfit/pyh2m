@@ -2,6 +2,13 @@
 History
 =======
 
+0.2.0 (2020-05-22)
+------------------
+
+* WIP: super 2 levels table convert
+* WIP: raw text with <b> <strong> <i> <em>
+* Fix: a lot of html convert bug in feed() 
+
 0.1.4 (2020-05-20)
 ------------------
 
