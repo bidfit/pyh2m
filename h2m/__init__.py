@@ -16,3 +16,6 @@ def md():
 
 def new_h2m():
     return HTMLParserToMarkDown()
+
+def use_raw_text():
+    h2m.raw_text_flag = True

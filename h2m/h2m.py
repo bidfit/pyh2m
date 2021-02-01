@@ -5,11 +5,22 @@ import logging
 from html import unescape
 from html.parser import HTMLParser
 from html.entities import name2codepoint
-from inspect import isfunction
+
+# from inspect import isfunction
+# from typing import Callable, ClassVar, Union
+
+logging.basicConfig(format="%(asctime)s %(message)s", datefmt="%m/%d/%Y %I:%M:%S %p")
+logger = logging.getLogger(__name__)
 
 
 class TableParser:
     # 表格相关开始
+    is_handle_thead_char: bool
+    is_tr: bool
+    is_th: bool
+    tr_count: int
+    th_count: int
+    table_level: int
 
     def __init__(self):
         self.reset_table()
@@ -23,7 +34,7 @@ class TableParser:
         self.table_level = 1
 
     def get_thead_char(self):
-        thead_char = '|'
+        thead_char = "|"
         i = self.th_count
         while i > 0:
             thead_char = f"{thead_char}--------|"
@@ -47,7 +58,7 @@ class TableParser:
         return f"{node.get('md')}|"
 
     def convert_tr(self, node):
-        tr_str = ''
+        tr_str = ""
         self.tr_count = self.tr_count + 1
 
         tr_str = f"\n|{node.get('md')}"
@@ -63,17 +74,40 @@ class TableParser:
         self.is_th = True
         if self.tr_count == 0:
             self.th_count = self.th_count + 1
-        md = node.get('md')
-        if node['table_level'] != 13:
-            r = re.compile('(<br>)|(<br/>)|(</br>)|(\n)|(\r\n)')
-            md = re.sub(r, '', md)
-        return f'{md}|'
+        md = node.get("md")
+        if node["table_level"] != 13:
+            r = re.compile("(<br>)|(<br/>)|(</br>)|(\n)|(\r\n)")
+            md = re.sub(r, "", md)
+        return f"{md}|"
+
     # 表格相关结束
 
 
+class Node(dict):
+    md: str
+    tag: str
+    attrs: dict
+    is_in_pre_node: bool
+    table_level: int
+    raw_text_flag: bool
+
+    def __init__(self, tag: str, attrs: dict, is_in_pre_node: bool, table_level: bool, raw_text_flag: bool):
+        super().__init__()
+        self.tag = tag
+        self.attrs = dict(attrs)
+        self.is_in_pre_node = is_in_pre_node
+        self.table_level = table_level
+        self.raw_text_flag = raw_text_flag
+        self.md = ""
+
+
 class ConvertClass:
+    li_header: str
+    table_parser: TableParser
+    converters: dict
+
     def __init__(self):
-        self.li_header = 'H2M_LI_HEADER'
+        self.li_header = "H2M_LI_HEADER"
         self.table_parser = TableParser()
         self.converters = {
             "a": self.convert_a,
@@ -87,133 +121,130 @@ class ConvertClass:
             "h4": "\n#### {}\n",
             "h5": "\n##### {}\n",
             "h6": "\n###### {}\n",
-
             "ul": self.convert_ul,
             "ol": self.convert_ol,
             "li": self.li_header + " {}\n",
-
             "table": self.table_parser.convert_table,
             "tr": self.table_parser.convert_tr,
             "th": self.table_parser.convert_th,
             "td": self.table_parser.convert_td,
-
             "hr": "\n---\n",
             "br": "\n",
-
             "div": "\n{}\n",
             "img": self.convert_img,
             "pre": self.convert_pre,
             "code": self.convert_code,
             "strong": self.convert_b_strong,
-
             "script": "",
             "style": "",
-
             "blockquote": self.convert_blockquote,
-
-            "default": "{}"
+            "default": "{}",
         }
 
-    def convert_a(self, node):
+    def convert_a(self, node: Node) -> str:
         text = node.get('md', node.get('attrs', {'href': ''}).get('href'))
         text = text.replace('\n', '')
         href = node.get('attrs', {'href': text}).get('href')
         return f"[{text}]({href})"
 
     def convert_b_strong(self, node):
-        if node['raw_text_flag']:
+        if node["raw_text_flag"]:
             return f"{node.get('md')}"
         else:
             return f"**{node.get('md')}**"
 
     def convert_i_em(self, node):
-        if node['raw_text_flag']:
+        if node["raw_text_flag"]:
             return f"{node.get('md')}"
         else:
             return f"_{node.get('md')}_"
 
     def convert_img(self, node):
-        attrs = node.get('attrs', {'title': '', 'alt': '', 'src': ''})
-        title = attrs.get('title', attrs.get('alt', ''))
-        src = attrs.get('src', '')
+        attrs = node.get("attrs", {"title": "", "alt": "", "src": ""})
+        title = attrs.get("title", attrs.get("alt", ""))
+        src = attrs.get("src", "")
 
-        if title == '' and src == '':
-            return ''
+        if title == "" and src == "":
+            return ""
 
         return f"![{title}]({src})"
 
     def convert_ul(self, node):
         return f"\n{str(node['md']).replace(self.li_header, '-')}"
 
-    def convert_ol(self, node):
+    def convert_ol(self, node: Node):
         i = 1
-        count = node['md'].count(self.li_header)
+        count = node.md.count(self.li_header)
         while i <= count:
-            node['md'] = str(node['md']).replace(self.li_header, f"{i}.", 1)
+            node["md"] = str(node["md"]).replace(self.li_header, f"{i}.", 1)
             i = i + 1
 
         return f"\n{node['md']}"
 
     def convert_pre(self, node):
-        md = node.get('md', None)
+        md = node.get("md", None)
         if md:
-            return ''.join(map(lambda line: f'    {line}\n', md.split('\n')))
+            return "".join(map(lambda line: f"    {line}\n", md.split("\n")))
         return f"\n{md}\n"
 
     def convert_code(self, node):
-        md = node['md']
-        if node.get('is_in_pre_node', False):
+        md = node["md"]
+        if node.get("is_in_pre_node", False):
             return md
-        return f'`{md}`'
+        return f"`{md}`"
 
     def convert_blockquote(self, node):
-        r_str = '(^(\n+))|((\n+)$)'
+        r_str = "(^(\n+))|((\n+)$)"
         r = re.compile(r_str)
-        md = node.get('md')
+        md = node.get("md")
         # md = re.sub(r, '', md)
-        if node['table_level'] > 10:
+        if node["table_level"] > 10:
             return md
-        md = ''.join(
-            map(lambda line: f"> {re.sub(r, '', line)}\n", md.split('\n')))
-        return f'\n{md}\n'
+        md = "".join(map(lambda line: f"> {re.sub(r, '', line)}\n", md.split("\n")))
+        return f"\n{md}\n"
 
     def convert(self, node):
-        if node.get('md', None) is not None:
-            node['md'] = node['md'] and ''.join(node['md'])
-            if node['md'] == 'None' :
-                print('hi None')
+        if node.get("md", None) is not None:
+            node["md"] = node["md"] and "".join(node["md"])
+            if node["md"] == "None":
+                print("hi None")
         else:
-            node['md'] = ""
+            node["md"] = ""
 
-        converter = self.converters.get(
-            node.get('tag'), self.converters.get('default'))
+        converter = self.converters.get(node.get("tag"), self.converters.get("default"))
 
         if isinstance(converter, str):
-            node['md'] = converter.format(node['md'])
+            node["md"] = converter.format(node["md"])
         else:
-            node['md'] = converter(node)
+            node["md"] = converter(node)
 
-        return node['md']
+        return node["md"]
 
     ###################
 
 
 class HTMLParserToMarkDown(HTMLParser):
-    converter = ConvertClass()
-    node_buffer = []
-    results = []
-    is_in_pre_node = False
-    table_level = 1
-    raw_text_flag = False
-    logging.basicConfig(format='%(asctime)s %(message)s',
-                        datefmt='%m/%d/%Y %I:%M:%S %p')
-    logger = logging.getLogger(__name__)
+    converter: ConvertClass
+    node_buffer: list
+    results: list
+    is_in_pre_node: bool
+    table_level: int
+    raw_text_flag: bool
+
+    def __init__(self):
+        super().__init__()
+        self.converter = ConvertClass()
+        self.node_buffer = []
+        self.results = []
+        self.is_in_pre_node = False
+        self.table_level = 1
+        self.raw_text_flag = False
 
     def set_debug_level(self, level):
-        self.logger.setLevel(level)
+        logger.setLevel(level)
 
     def feed(self, data):
-        r_table = re.compile('<table[\S\s\w]*<table[\S\s\w]*</table>')
+        r_table = re.compile(r"<table[\S\s\w]*<table[\S\s\w]*</table>")
         if re.search(r_table, data):
             self.table_level = 12
 
@@ -221,38 +252,37 @@ class HTMLParserToMarkDown(HTMLParser):
         # 只接收完整的html
         self.close()
 
-
     def handle_starttag(self, tag, attrs):
         node = {
-            'tag': tag,
-            'attrs': dict(attrs),
-            'is_in_pre_node': self.is_in_pre_node,
-            'table_level': self.table_level,
-            'raw_text_flag': self.raw_text_flag
+            "tag": tag,
+            "attrs": dict(attrs),
+            "is_in_pre_node": self.is_in_pre_node,
+            "table_level": self.table_level,
+            "raw_text_flag": self.raw_text_flag,
         }
 
-        if tag == 'table':
+        if tag == "table":
             self.table_level = self.table_level + 1
 
         if tag == "pre":
             self.is_in_pre_node = True
 
         if tag == "br":
-            self.logger.debug("is br tag")
+            logger.debug("is br tag")
             return
 
         self.node_buffer.append(node)
-        self.logger.debug("Start tag:" + tag)
+        logger.debug("Start tag:" + tag)
         for attr in attrs:
-            self.logger.debug("     attr:" + str(attr))
+            logger.debug("     attr:" + str(attr))
 
     def handle_endtag(self, tag):
         node_buffer_length = len(self.node_buffer)
-        if tag == 'table':
+        if tag == "table":
             self.table_level = self.table_level - 1
 
         if tag == "br":
-            self.node_buffer[node_buffer_length - 1].get('md', []).append('\n')
+            self.node_buffer[node_buffer_length - 1].get("md", []).append("\n")
             return
         if node_buffer_length != 0:
             last = self.node_buffer.pop()
@@ -261,20 +291,20 @@ class HTMLParserToMarkDown(HTMLParser):
         else:
             md = ""
 
-        if tag is "pre":
+        if tag == "pre":
             is_in_pre_node = False
 
         if node_buffer_length == 0:
             return self.results.append(md)
 
         tail = self.node_buffer[node_buffer_length - 1]
-        tail['md'] = tail.get('md', [])
-        tail['md'].append(md)
+        tail["md"] = tail.get("md", [])
+        tail["md"].append(md)
 
-        self.logger.debug("End tag  :" + tag)
+        logger.debug("End tag  :" + tag)
 
     def handle_data(self, data):
-        if re.search(r'^\s+$', data):
+        if re.search(r"^\s+$", data):
             return
         # data = self.unescape(data)
         data = unescape(data)
@@ -282,30 +312,30 @@ class HTMLParserToMarkDown(HTMLParser):
         node_buffer_length = len(self.node_buffer)
         if node_buffer_length >= 1:
             last = self.node_buffer[node_buffer_length - 1]
-            self.logger.debug(last)
+            logger.debug(last)
 
-            last['md'] = last.get('md', [])
-            last['md'].append(data)
+            last["md"] = last.get("md", [])
+            last["md"].append(data)
         else:
             self.results.append(data)
-        self.logger.debug("Data     :" + data)
+        logger.debug("Data     :" + data)
 
     def handle_comment(self, data):
-        self.logger.debug("Comment  :" + data)
+        logger.debug("Comment  :" + data)
 
     def handle_entityref(self, name):
         c = chr(name2codepoint[name])
-        self.logger.debug("Named ent:" + c)
+        logger.debug("Named ent:" + c)
 
     def handle_charref(self, name):
-        if name.startswith('x'):
+        if name.startswith("x"):
             c = chr(int(name[1:], 16))
         else:
             c = chr(int(name))
-        self.logger.debug("Num ent  :" + c)
+        logger.debug("Num ent  :" + c)
 
     def handle_decl(self, data):
-        self.logger.debug("Decl     :" + data)
+        logger.debug("Decl     :" + data)
 
     def reset_parser(self):
         self.results = []
@@ -319,12 +349,12 @@ class HTMLParserToMarkDown(HTMLParser):
                 md = self.converter.convert(last)
                 self.results.append(md)
 
-        r_head_n = re.compile('^\n+|\n+$')
-        r_3n_2n = re.compile('\n{3,}')
+        r_head_n = re.compile("^\n+|\n+$")
+        r_3n_2n = re.compile("\n{3,}")
 
         clean_md = "".join(self.results)
-        clean_md = re.sub(r_head_n, '', clean_md)
-        clean_md = re.sub(r_3n_2n, '\n\n', clean_md)
+        clean_md = re.sub(r_head_n, "", clean_md)
+        clean_md = re.sub(r_3n_2n, "\n\n", clean_md)
 
         self.reset_parser()
 
@@ -334,7 +364,7 @@ class HTMLParserToMarkDown(HTMLParser):
 h2m = HTMLParserToMarkDown()
 
 if __name__ == "__main__":
-    # h2m.set_debug_level(logging.DEBUG)
+    h2m.set_debug_level(logging.DEBUG)
 
     # # h2m.feed('<test_xhtml /><error></error><h1>&amp;Python</h1><ol><li>first</li><li>secend</li></ol><ul><li>first</li><li>secend</li></ul>')
     # h2m.feed('''    <blockquote>
@@ -350,9 +380,11 @@ if __name__ == "__main__":
     # </blockquote>''')
 
     import pathlib
+
     h2m.raw_text_flag = True
-    test_html = pathlib.Path("tests\\html\\raw_text.html")
-    with test_html.open('rt', encoding='utf-8') as th:
+    test_html = pathlib.Path("tests\\html\\table_layout.html")
+    with test_html.open("rt", encoding="utf-8") as th:
         html = th.readlines()
         h2m.feed("".join(html))
     print(h2m.md())
+# test ZZ
